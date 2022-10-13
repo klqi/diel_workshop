@@ -1,0 +1,13 @@
+*.csv
+*.html
+*.xlsx
+.DS_Store
+.ipynb_checkpoints/
+CN11ID/
+seaflowpy/
+stats/
+*.feather
+individual_seaflow/
+*.png
+*.vscode/
+__pycache__/
