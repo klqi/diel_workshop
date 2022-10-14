@@ -11,3 +11,4 @@ individual_seaflow/
 *.png
 *.vscode/
 __pycache__/
+.cmap_key
