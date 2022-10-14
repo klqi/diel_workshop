@@ -1,0 +1,18 @@
+name: tsd
+
+channels:
+  - conda-forge
+
+dependencies:
+  - ipython
+  - matplotlib
+  - pandas
+  - nb_conda_kernels
+  - notebook
+  - astral
+  - statsmodels
+  - plotnine
+  - python=3.8
+  - pip
+  - pip:
+    - pycmap
