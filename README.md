@@ -1,6 +1,6 @@
 ## Diel Workshop Time Series Clinic
 
-###Analyzing diel changes in Prochlorococcus and Synechococcus diameter through a time series model
+### Analyzing diel changes in Prochlorococcus and Synechococcus diameter through a time series model
 
 To download the clinic notebook, clone the repository:
 > git clone https://github.com/klqi/diel_workshop.git
