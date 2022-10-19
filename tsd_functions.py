@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from diel_tools import find_night
 import matplotlib.dates as mdates
 from datetime import timedelta
+from diel_tools import plotseasonal
 
 
 # helper function to interpolate data based on time
@@ -149,8 +150,8 @@ def plot_diel_cycle(seasonal_df, trend_df, par_df, diel_df, syn_diel, cruise_nam
     # set variables
     x = pro_hourly['time']
     x1 = pro_trend['time']
-    y = pro_hourly['seasonal mean']
     y1 = pro_trend['trend mean']
+    y = (pro_hourly['seasonal mean'] - 1) * y1
     error = pro_hourly['seasonal std']
     error1 = pro_trend['trend std']
 
@@ -172,8 +173,8 @@ def plot_diel_cycle(seasonal_df, trend_df, par_df, diel_df, syn_diel, cruise_nam
     syn_trend = trend_df.loc[trend_df['pop']=='synecho']
     x = syn_hourly['time']
     x1 = syn_trend['time']
-    y = syn_hourly['seasonal mean']
     y1 = syn_trend['trend mean']
+    y = (syn_hourly['seasonal mean'] - 1) * y1
     error = syn_hourly['seasonal std']
     error1 = syn_trend['trend std']
     l1 = axs[1].plot(x, y, color='green', label='Seasonal')
@@ -196,23 +197,23 @@ def plot_diel_cycle(seasonal_df, trend_df, par_df, diel_df, syn_diel, cruise_nam
     # plot 3 subplot (lat/par)
     # plot latitude
     ln1=axs[2].plot(diel_df['time'], diel_df['lat'], c='red', alpha=0.5, label='Latitude')
-    # normalize and plot par on same axis as lat
-    norm_par = normalize(par_df['par'],
-         (np.min(par_df['par']), np.max(par_df['par'])),
-          (np.min(diel_df['lat']), np.max(diel_df['lat'])))
-    ln2=axs[2].plot(par_df['time'], norm_par, c='orange', alpha=0.5, marker='.', label='Summed Par')
+    # # normalize and plot par on same axis as lat
+    # norm_par = normalize(par_df['par'],
+    #      (np.min(par_df['par']), np.max(par_df['par'])),
+    #       (np.min(diel_df['lat']), np.max(diel_df['lat'])))
+    # ln2=axs[2].plot(par_df['time'], norm_par, c='orange', alpha=0.5, marker='.', label='Summed Par')
     # plot log biomass on seconary axis
     ax2 = axs[2].twinx()
-    pro_bio = np.log(get_trend_only(diel_df, 
-                  pop='prochloro',
-                  col='biomass'))
-    syn_bio = np.log(get_trend_only(syn_diel, 
-                  pop='synecho',
-                  col='biomass'))
-    ln3=ax2.plot(diel_df['time'],pro_bio.values, alpha=0.5, label='Pro', linestyle=':')
-    ln4=ax2.plot(syn_diel['time'],syn_bio.values, c='g', alpha=0.5, label='Syn', linestyle=':')
+    # pro_bio = np.log(get_trend_only(diel_df, 
+    #               pop='prochloro',
+    #               col='biomass'))
+    # syn_bio = np.log(get_trend_only(syn_diel, 
+    #               pop='synecho',
+    #               col='biomass'))
+    # ln3=ax2.plot(diel_df['time'],pro_bio.values, alpha=0.5, label='Pro', linestyle=':')
+    # ln4=ax2.plot(syn_diel['time'],syn_bio.values, c='g', alpha=0.5, label='Syn', linestyle=':')
     # add legend for panel
-    lns = ln1+ln2+ln3+ln4
+    lns = ln1#+ln3+ln4#ln2+
     labs = [l.get_label() for l in lns]
     axs[2].legend(lns, labs, loc='center left', bbox_to_anchor=(1.05, 0.5))
     
@@ -226,9 +227,9 @@ def plot_diel_cycle(seasonal_df, trend_df, par_df, diel_df, syn_diel, cruise_nam
     axs[2].set_ylabel('Latitude/Normalized PAR', c='red')
     ax2.set_ylabel('Log Biomass')
     plt.suptitle(f'{cruise_name} Hourly Averaged Diel Cycle')
-    # fix y range- diel
-    axs[0].set_ylim([0.85, 1.25])
-    axs[1].set_ylim([0.85, 1.25])
+    # # fix y range- diel
+    # axs[0].set_ylim([0.85, 1.25])
+    # axs[1].set_ylim([0.85, 1.25])
     # fix for diam- pro
     ax0.set_ylim([0.4, 0.85])
     # syn
