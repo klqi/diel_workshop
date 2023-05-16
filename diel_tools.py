@@ -124,8 +124,6 @@ def peaks_and_plateaus(df=None, column=None, max_order=12, min_order=12):
 
 
 ##### functions for solar calculations ##########
-
-
 from datetime import datetime, timedelta, time
 # use astral (pyephem not in python 3.8 yet)
 from astral import Observer
@@ -152,10 +150,12 @@ def is_time_between(begin_time, end_time, check_time):
 # requires lat (float), lon (float), and time (datetime) columns as input
 # returns dataframe with added columns, night (day, night, sunrise, sunset) and time_day (offset for calculation)
 def find_night(df):
-    df = df[df['lat'].notnull()].reset_index().drop(columns=['index'])
+    # drop annoying columns
+    if 'index' in df:
+        df.drop(columns=['index'], inplace=True)
     # offset by 1 day
     df['time_day'] = df['time'].dt.round('1d') - pd.DateOffset(1)
-    df['night'] = 'night'
+    df['night'] = 'nan'
 
     # loooooop thru whee! (using sunrise/sunset is better than dawn/dusk- why?)
     for index, row in df.iterrows():
@@ -164,16 +164,137 @@ def find_night(df):
         sr = sunrise(obs, date = row['time_day'])
         ss = sunset(obs, date = row['time_day'])
         # round to nearest hour
-        night_time = [hour_rounder(pd.to_datetime(x)) for x in (ss, sr)]
+        night_time = [hour_rounder(pd.to_datetime(x)) for x in (sr, ss)]
         # say if time is at sunset
         if row['time'] == night_time[0]:
-            df.loc[index, 'night'] = 'sunset'
+            df.loc[index, 'night'] = 'sunrise'
         # sunrise check
         elif row['time'] == night_time[1]:
-            df.loc[index, 'night'] = 'sunrise'
-        # night check
+            df.loc[index, 'night'] = 'sunset'
+        # day check
         elif is_time_between(night_time[0], night_time[1], row['time']):
-            df.loc[index, 'night'] = 'night'
+            # catch edge case where astral fails to find sunrise
+            if (0 < index < len(df)):
+                # change to sunrise if the row directly before is night
+                if (df.loc[index-1, 'night']=='night'):
+                    df.loc[index-1, 'night']='sunrise'
+                    df.loc[index,'night']='day'
+                else:
+                    df.loc[index, 'night'] = 'day'
+            else:
+                df.loc[index, 'night'] = 'day'
+        # night check
         else:
-            df.loc[index, 'night'] = 'day'
+            # catch edge case where astral fails to find sunset
+            if (0 < index < len(df)):
+                # must be run after index check or will fail
+                if (df.loc[index-1, 'night']=='day'):
+                    # change previous row to sunrise if before is day
+                    df.loc[index-1, 'night']='sunset'
+                    # change present row
+                    df.loc[index, 'night']='night'
+                else:
+                    df.loc[index, 'night'] = 'night'
+            else:
+                df.loc[index, 'night'] = 'night'
     return(df)
+
+## helper function to calculate some function of a specified covariate from sunrise to sunset
+## inputs: diel_df = dataframe with sunset/sunrise column, col = covariate to check, func = fucntion to run
+### This is still under development, only col=par and func=sum works right now!
+def calc_daily_vars(diel_df, col, func='sum'):
+    # find times between sunrise and sunset each day to calculate par from each full day
+    check_times = ['sunrise', 'sunset']
+    dd = diel_df[diel_df['night'].isin(check_times)]
+    # keep track of daily calculated par
+    par_vals = []
+    days = []
+    # implement row iterator to check next row
+    row_iterator = dd.iterrows()
+    _, last_row = next(row_iterator)
+    # loop through to find indices with day
+    for i, row in row_iterator:
+        # if first element is sunset, then skip row
+        if (last_row['night']=='sunset'):
+            last_row = row
+            continue
+        # check if at the end
+        elif (last_row['night']=='sunrise'):
+            # starting at sunrise, save index
+            day_inds = np.arange(last_row.name, row.name+1)
+            # get par values from day indices
+            if func=='sum':
+                daily_par = {row['time']:np.sum(diel_df.iloc[day_inds]['par'])}
+            elif func=='mean':
+                daily_par = {row['time']:np.mean(diel_df.iloc[day_inds]['par'])}
+            par_vals.append(daily_par)
+            days.append(day_inds)
+            last_row = row
+        # skip if sunset
+        else:
+            last_row = row
+            continue
+
+    # make df to calculate total par per day
+    sunset = [list(n.keys())[0] for n in par_vals]
+    par_sum = [list(n.values())[0] for n in par_vals]
+    daily_par = pd.DataFrame()
+    # time is at sunset, end of the day
+    daily_par['time'] = sunset
+    daily_par['par_sum']= par_sum
+    # return daily par values and day indices
+    return(daily_par, days)
+
+
+# calculate amplitude by calculating the slope for each day
+# helper function to calculate slope over a certain number of hours
+def calc_slope(hours, col):
+    return((col-col.shift(hours)).fillna(0)/hours)
+
+# helper function to mark each day by sunset/sunrise instead of by utc time
+## input: df=dataframe with day/night/sunrise/sunset labels (run through find_night function)
+## output: resulting df with cruise_day column
+def days_by_sunrise(diel_df):
+    # find times for each sunrise 
+    dd = diel_df.loc[diel_df['night']=='sunrise']
+    # implement row iterator to check next row
+    row_iterator = dd.iterrows()
+    _, last_row = next(row_iterator)
+    # keep track of days
+    count = 0
+    diel_df['cruise_day'] = 0
+    diel_df['day_hour'] = 0
+    # loop through to find indices with day
+    for i, row in row_iterator:
+        # if the cruise did not start at sunrise, include day 0 as a partial day
+        if (count == 0)&(diel_df.loc[count,'night']!='sunrise'):
+            # get indices for day 0
+            inds = np.arange(0, last_row.name+1)
+            # set indices to day 0
+            diel_df.loc[inds,'cruise_day']=count
+            count+=1
+        # else go through the rest of each day
+        if(count>0):
+            # starting at sunrise, save index until the next sunrise
+            inds = np.arange(last_row.name, row.name+1)
+            # save day as count number
+            diel_df.loc[inds,'cruise_day']=count
+            # save hour 
+            diel_df.loc[inds, 'day_hour']=np.arange(0,len(inds))
+            count+=1
+            last_row = row
+        # are we at the last row?
+        if (count==len(dd)):
+            # set the remaining days to the count
+            inds = np.arange(last_row.name, len(diel_df))
+            diel_df.loc[inds,'cruise_day']=count
+            diel_df.loc[inds, 'day_hour']=np.arange(0,len(inds))
+    return(diel_df)
+
+def get_complete_days(data):
+    # only grab complete days
+    day_counts=data.groupby(['cruise_day','pop']).agg({'day_hour':'count'}).reset_index()
+    complete_days=pd.unique(day_counts.loc[day_counts['day_hour']>=24,'cruise_day'])
+    # exclude night and incopmlete days
+    days=data.loc[data['cruise_day'].isin(complete_days)&(data['night']!='night')]
+    return(days)
